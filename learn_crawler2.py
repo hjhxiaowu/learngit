@@ -18,13 +18,8 @@ Zhihu = 'http://www.zhihu.com/'
 Login_url = Zhihu + 'login'
 #Vote_url = Zhihu + 'answer/' + ans_id +'/voters_profile?total=99999&offset='+str(num)+'0'
 def login():
-    cf = ConfigParser.ConfigParser()
-    cf.read("config.ini")
-    cookies = cf._sections['cookies']
-
-    email = cf.get("info", "email")
-    password = cf.get("info", "password")
-    cookies = dict(cookies)
+    email = raw_input('请输入知乎登录邮箱:')
+    password = raw_input('请输入知乎登录密码:')
     global s
     s = requests.session()
     login_data = {"email": email, "password": password}
@@ -34,8 +29,7 @@ def login():
     'Referer': "http://www.zhihu.com/",
     'X-Requested-With': "XMLHttpRequest"
         }
-    r = s.post(Login_url, data=login_data, headers=header)   
-login()
+    r = s.post(Login_url, data=login_data, headers=header)
 
 def get_voters():
 #两种思路
@@ -63,7 +57,7 @@ def get_voters():
         #print html
         target = json.loads(html)
         Vote_url = 'http://www.zhihu.com'+target['paging']['next']
-        
+
         #print html
         #获取用户名
         i = 10*num
@@ -72,7 +66,7 @@ def get_voters():
         for each in namelist:
             #print each.decode("unicode-escape")
             sheet.write(i,0,each.decode("unicode-escape"))
-            i = i+1        
+            i = i+1
         #获取用户地址
         i = 10*num
         userurl = r'href=\\"(http://www.zhihu.com/people/.*?)\\'
@@ -91,7 +85,7 @@ def get_voters():
             #print each
             sheet.write(i,1,each)
             i = i+1
-        
+
         #获取感谢
         i = 10*num
         thank = r'([_a-zA-Z0-9_]{0,10}) \\u611f\\u8c22'
@@ -118,9 +112,9 @@ def get_voters():
             sheet.write(i,4,each)
             i = i+1
         num = num+1
-        
+
     book.save('tmp/v2result.xls')
-    print 'Mission Complete'        
+    print 'Mission Complete'
 
 start = time.clock()
 get_voters()
