@@ -17,6 +17,7 @@ from bs4 import BeautifulSoup
 Zhihu = 'http://www.zhihu.com/'
 Login_url = Zhihu + 'login'
 #Vote_url = Zhihu + 'answer/' + ans_id +'/voters_profile?total=99999&offset='+str(num)+'0'
+
 def login():
     email = raw_input('请输入知乎登录邮箱:')
     password = raw_input('请输入知乎登录密码:')
