@@ -48,7 +48,7 @@ def getComments(page):
         if comment:
             comments.append(comment[0])
         else:
-            comments.append('0条')
+            comments.append(u'0条')
     return comments
 
 # 爬取游记提及条数
@@ -60,7 +60,7 @@ def getTravelNotes(page):
         if travelNote:
             travelNotes.append(travelNote[0])
         else:
-            travelNotes.append('0篇')
+            travelNotes.append(u'0篇')
     return travelNotes
 
 # 爬取酒店位于区域
@@ -72,7 +72,7 @@ def getAreas(page):
         if area:
             areas.append(area[0])
         else:
-            areas.append('none')
+            areas.append(u'无提供信息')
     return areas
 
 # 爬取最低价格信息
@@ -106,7 +106,7 @@ if __name__ == '__main__':
     start2 = time.time()
     pool = Pool(4)
     urllist = []
-    for i in range(1, 11):
+    for i in range(1, 2):
         print i
         url = 'http://www.mafengwo.cn/hotel/11053/?sFrom=mdd#indate=2015-09-28&outdate=2015-09-29&q=&p=%s&scope=city%%2C0%%2C&sort=comment_desc&sales=0&price=0%%2C' % i
         urllist.append(url)
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     pool.join()
     for li in results:
         hotels.extend(li)
-    hotels[0].printHotel()
+    hotels[4].printHotel()
     hotels[1].printHotel()
     print len(hotels)
     end2 = time.time()
