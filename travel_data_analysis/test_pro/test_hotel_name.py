@@ -3,14 +3,20 @@
 __author__ = 'junho'
 
 """
-蚂蜂窝酒店数据爬虫项目——酒店名称测试
-2015/09/26
+########################################################
+purpose    : 蚂蜂窝酒店数据爬虫项目——酒店名称测试
+date       : 2015/09/26
+author     : junho
+--------------------------------------------------------
+2015/10/12 : 添加pandas
+########################################################
 """
 
 from multiprocessing import Pool
 from lxml import etree
 import requests
 import time
+import pandas as pd
 
 # 酒店类
 class Hotel():
@@ -104,11 +110,16 @@ def getHotels(url):
 # -------------------------主函数------------------------- #
 if __name__ == '__main__':
     start2 = time.time()
+    indate = '2015-11-22'  # 入住时间
+    outdate = '2015-11-23' # 退房时间
+    # 2015/10/12 : 增加pandas
+    df = pd.DataFrame()
+    # ------------END------------ #
     pool = Pool(4)
     urllist = []
     for i in range(1, 2):
         print i
-        url = 'http://www.mafengwo.cn/hotel/11053/?sFrom=mdd#indate=2015-09-28&outdate=2015-09-29&q=&p=%s&scope=city%%2C0%%2C&sort=comment_desc&sales=0&price=0%%2C' % i
+        url = 'http://www.mafengwo.cn/hotel/11053/?sFrom=mdd#indate=%s&outdate=%s&q=&p=%s&scope=city%%2C0%%2C&sort=comment_desc&sales=0&price=0%%2C' % (indate, outdate, i)
         urllist.append(url)
     # 多进程测试
     hotels = []
@@ -117,8 +128,8 @@ if __name__ == '__main__':
     pool.join()
     for li in results:
         hotels.extend(li)
-    hotels[4].printHotel()
-    hotels[1].printHotel()
+    for index in range(20):
+        hotels[index].printHotel()
     print len(hotels)
     end2 = time.time()
     print u'多进程执行时间：%s' % (end2 - start2)
