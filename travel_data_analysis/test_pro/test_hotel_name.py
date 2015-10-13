@@ -17,16 +17,18 @@ from multiprocessing import Pool
 from lxml import etree
 import requests
 import time
+import random
 import pandas as pd
 
 # 酒店类
 class Hotel():
-    def __init__(self, name, comments, travelNotes, area, priceInfo):
+    def __init__(self, name, comments, travelNotes, area, priceInfo, score):
         self.name = name
         self.comments = comments
         self.travelNotes = travelNotes
         self.area = area
         self.priceInfo = priceInfo
+        self.score = score
 
     def printHotel(self):
         print u'酒店名称：%s' % self.name
@@ -34,6 +36,7 @@ class Hotel():
         print u'游记提及条数：%s' % self.travelNotes
         print u'位于区域：%s' % self.area
         print u'最低价格：%s元' % self.priceInfo
+        print u'评分：%s' % self.score
 
     def hotelInfo(self):
         li = []
@@ -42,6 +45,7 @@ class Hotel():
         li.append(self.travelNotes)
         li.append(self.area)
         li.append(self.priceInfo)
+        li.append(self.score)
         return li
 
 # -------------------------解析方法-------------------------- #
@@ -111,9 +115,11 @@ def getScores(page):
         url = homeUrl + href
         print url
         scorePage = getPage(url)
-        score = scorePage.xpath('//div[@class="wrapper-bg"]/div/div[@class="m-box m-intro clearfix"]/dl/dd/div[@class="btn_booking"]/span/em/text()')
-        print score
+        # //div[@class="wrapper-bg"]/div/div[@class="m-box m-intro clearfix"]/dl/dd/div[@class="btn_booking"]/span/em/text()
+        score = scorePage.xpath('//div[@class="btn_booking"]/span/em/text()')
         scores.append(score)
+        # 防反爬虫（反爬虫机制：并发）
+        time.sleep(2)
     return scores
 
 def getHotels(url):
@@ -126,20 +132,21 @@ def getHotels(url):
     areas = getAreas(page)
     scores = getScores(page)
     for i in range(20):
-        hotel = Hotel(names[i], comments[i], travelNotes[i], areas[i], priceInfos[i])
+        hotel = Hotel(names[i], comments[i], travelNotes[i], areas[i], priceInfos[i], scores[i])
         hotels.append(hotel)
-        print scores[i]
     return hotels
 
 # -------------------------主函数------------------------- #
 if __name__ == '__main__':
     start2 = time.time()
-    indate = raw_input(u'请输入入住时间（如：2015-11-22）：')
-    outdate = raw_input(u'请输入退房时间（如：2015-11-23）：')
+    # indate = raw_input(u'请输入入住时间（如：2015-11-22）：')
+    # outdate = raw_input(u'请输入退房时间（如：2015-11-23）：')
+    indate = '2015-11-22'
+    outdate = '2015-11-23'
     # ------------END------------ #
     pool = Pool(4)
     urllist = []
-    for i in range(1, 2):
+    for i in range(1, 3):
         print i
         url = 'http://www.mafengwo.cn/hotel/11053/?sFrom=mdd#indate=%s&outdate=%s&q=&p=%s&scope=city%%2C0%%2C&sort=comment_desc&sales=0&price=0%%2C' % (indate, outdate, i)
         urllist.append(url)
@@ -152,14 +159,11 @@ if __name__ == '__main__':
         hotels.extend(li)
     # 2015/10/12 : 增加pandas
     # tips : 用二维list数组读取数据，然后一次性放入DataFrame中会快很多
-    """
     hotelList = []
     for h in hotels:
         hotelList.append(h.hotelInfo())
-    df = pd.DataFrame(hotelList, columns=['酒店名称', '评论数', '游记提及条数', '位于区域', '酒店最低价格'])
-    # print df
-    """
-
+    df = pd.DataFrame(hotelList, columns=['酒店名称', '评论数', '游记提及条数', '位于区域', '酒店最低价格', '评分'])
+    print df
     print len(hotels)
     end2 = time.time()
     print u'多进程执行时间：%s' % (end2 - start2)
