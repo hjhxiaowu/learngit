@@ -9,6 +9,7 @@ date       : 2015/09/26
 author     : junho
 --------------------------------------------------------
 2015/10/12 : 添加pandas
+2015/10/13 : 添加爬取评分、满意条数字段
 ########################################################
 """
 
@@ -33,6 +34,15 @@ class Hotel():
         print u'游记提及条数：%s' % self.travelNotes
         print u'位于区域：%s' % self.area
         print u'最低价格：%s元' % self.priceInfo
+
+    def hotelInfo(self):
+        li = []
+        li.append(self.name)
+        li.append(self.comments)
+        li.append(self.travelNotes)
+        li.append(self.area)
+        li.append(self.priceInfo)
+        return li
 
 # -------------------------解析方法-------------------------- #
 # 获取page
@@ -92,6 +102,20 @@ def getPriceInfos(page):
         priceInfos.append(min(prices))
     return priceInfos
 
+# 2015/10/13 : 添加爬取评分、满意条数字段
+def getScores(page):
+    scores = []
+    homeUrl = 'http://www.mafengwo.cn'
+    hrefs = page.xpath('//div[@class="hotel-list"]/div[@class="hotel-item clearfix h-item"]/div[@class="hotel-title"]/div[@class="title"]/h3/a/@href')
+    for href in hrefs:
+        url = homeUrl + href
+        print url
+        scorePage = getPage(url)
+        score = scorePage.xpath('//div[@class="wrapper-bg"]/div/div[@class="m-box m-intro clearfix"]/dl/dd/div[@class="btn_booking"]/span/em/text()')
+        print score
+        scores.append(score)
+    return scores
+
 def getHotels(url):
     hotels = []
     page = getPage(url)
@@ -100,20 +124,18 @@ def getHotels(url):
     travelNotes = getTravelNotes(page)
     priceInfos = getPriceInfos(page)
     areas = getAreas(page)
-    # length = len(names)
-    # print length
+    scores = getScores(page)
     for i in range(20):
         hotel = Hotel(names[i], comments[i], travelNotes[i], areas[i], priceInfos[i])
         hotels.append(hotel)
+        print scores[i]
     return hotels
 
 # -------------------------主函数------------------------- #
 if __name__ == '__main__':
     start2 = time.time()
-    indate = '2015-11-22'  # 入住时间
-    outdate = '2015-11-23' # 退房时间
-    # 2015/10/12 : 增加pandas
-    df = pd.DataFrame()
+    indate = raw_input(u'请输入入住时间（如：2015-11-22）：')
+    outdate = raw_input(u'请输入退房时间（如：2015-11-23）：')
     # ------------END------------ #
     pool = Pool(4)
     urllist = []
@@ -128,8 +150,15 @@ if __name__ == '__main__':
     pool.join()
     for li in results:
         hotels.extend(li)
-    for index in range(20):
-        hotels[index].printHotel()
+    # 2015/10/12 : 增加pandas
+    # tips : 用二维list数组读取数据，然后一次性放入DataFrame中会快很多
+    """
+    hotelList = []
+    for h in hotels:
+        hotelList.append(h.hotelInfo())
+    df = pd.DataFrame(hotelList, columns=['酒店名称', '评论数', '游记提及条数', '位于区域', '酒店最低价格'])
+    # print df
+    """
     print len(hotels)
     end2 = time.time()
     print u'多进程执行时间：%s' % (end2 - start2)
