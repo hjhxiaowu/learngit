@@ -159,6 +159,7 @@ if __name__ == '__main__':
     df = pd.DataFrame(hotelList, columns=['酒店名称', '评论数', '游记提及条数', '位于区域', '酒店最低价格'])
     # print df
     """
+
     print len(hotels)
     end2 = time.time()
     print u'多进程执行时间：%s' % (end2 - start2)
