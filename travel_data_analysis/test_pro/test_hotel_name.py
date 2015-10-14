@@ -9,7 +9,8 @@ date       : 2015/09/26
 author     : junho
 --------------------------------------------------------
 2015/10/12 : 添加pandas
-2015/10/13 : 添加爬取评分、满意条数字段
+2015/10/13 : 添加爬取评分字段
+2015/10/14 : 添加爬取满意条数字段；导入mysql数据库
 ########################################################
 """
 
@@ -19,33 +20,48 @@ import requests
 import time
 import random
 import pandas as pd
+import MySQLdb
+# UnicodeEncodeError: 'ascii' codec can't encode characters in position 0-5: ordinal not in range(128)
+import sys
+reload(sys)
+sys.setdefaultencoding('utf-8')
 
 # 酒店类
 class Hotel():
-    def __init__(self, name, comments, travelNotes, area, priceInfo, score):
+    def __init__(self, name, comments, gComments, travelNotes, area, priceInfo, score):
         self.name = name
         self.comments = comments
+        self.gComments = gComments
         self.travelNotes = travelNotes
         self.area = area
         self.priceInfo = priceInfo
         self.score = score
 
+    def __init__(self, name, comments, travelNotes, area, priceInfo):
+        self.name = name
+        self.comments = comments
+        self.travelNotes = travelNotes
+        self.area = area
+        self.priceInfo = priceInfo
+
     def printHotel(self):
         print u'酒店名称：%s' % self.name
         print u'评论条数：%s' % self.comments
+        # print u'满意条数：%s' % self.gComments
         print u'游记提及条数：%s' % self.travelNotes
         print u'位于区域：%s' % self.area
         print u'最低价格：%s元' % self.priceInfo
-        print u'评分：%s' % self.score
+        # print u'评分：%s' % self.score
 
-    def hotelInfo(self):
+    def getHotelInfo(self):
         li = []
         li.append(self.name)
         li.append(self.comments)
+        # li.append(self.gComments)
         li.append(self.travelNotes)
         li.append(self.area)
         li.append(self.priceInfo)
-        li.append(self.score)
+        # li.append(self.score)
         return li
 
 # -------------------------解析方法-------------------------- #
@@ -107,21 +123,24 @@ def getPriceInfos(page):
     return priceInfos
 
 # 2015/10/13 : 添加爬取评分、满意条数字段
-def getScores(page):
+def getInsideInfo(page):
     scores = []
-    homeUrl = 'http://www.mafengwo.cn'
+    gComments = []
     hrefs = page.xpath('//div[@class="hotel-list"]/div[@class="hotel-item clearfix h-item"]/div[@class="hotel-title"]/div[@class="title"]/h3/a/@href')
+    homeUrl = 'http://www.mafengwo.cn'
     for href in hrefs:
         url = homeUrl + href
         print url
-        scorePage = getPage(url)
-        # //div[@class="wrapper-bg"]/div/div[@class="m-box m-intro clearfix"]/dl/dd/div[@class="btn_booking"]/span/em/text()
-        score = scorePage.xpath('//div[@class="btn_booking"]/span/em/text()')
-        scores.append(score)
+        inpage = getPage(url)
+        scores.append(inpage.xpath('//div[@class="btn_booking"]/span/em/text()'))
+        gcomm = inpage.xpath('//*[@id="comment_header"]/div/ul/li[3]/a/span/text()')
+        gComments.append(gcomm)
+        print gcomm
         # 防反爬虫（反爬虫机制：并发）
-        time.sleep(2)
-    return scores
+        time.sleep(random.randint(1, 3))
+    return scores, gComments
 
+# 酒店类信息爬取汇总
 def getHotels(url):
     hotels = []
     page = getPage(url)
@@ -130,41 +149,59 @@ def getHotels(url):
     travelNotes = getTravelNotes(page)
     priceInfos = getPriceInfos(page)
     areas = getAreas(page)
-    scores = getScores(page)
+    # scores, gComments = getInsideInfo(page)
     for i in range(20):
-        hotel = Hotel(names[i], comments[i], travelNotes[i], areas[i], priceInfos[i], scores[i])
+        # hotel = Hotel(names[i], comments[i], gComments[i], travelNotes[i], areas[i], priceInfos[i], scores[i])
+        hotel = Hotel(names[i], comments[i], travelNotes[i], areas[i], priceInfos[i])
         hotels.append(hotel)
     return hotels
 
-# -------------------------主函数------------------------- #
-if __name__ == '__main__':
-    start2 = time.time()
-    # indate = raw_input(u'请输入入住时间（如：2015-11-22）：')
-    # outdate = raw_input(u'请输入退房时间（如：2015-11-23）：')
+# 测试案例1：多进程
+def test1():
+    start = time.time()
     indate = '2015-11-22'
     outdate = '2015-11-23'
-    # ------------END------------ #
-    pool = Pool(4)
-    urllist = []
-    for i in range(1, 3):
+    urllist, hotels = [], []
+    for i in range(1, 70):
         print i
         url = 'http://www.mafengwo.cn/hotel/11053/?sFrom=mdd#indate=%s&outdate=%s&q=&p=%s&scope=city%%2C0%%2C&sort=comment_desc&sales=0&price=0%%2C' % (indate, outdate, i)
         urllist.append(url)
-    # 多进程测试
-    hotels = []
+    pool = Pool(4)
     results = pool.map(getHotels, urllist)
     pool.close()
     pool.join()
     for li in results:
         hotels.extend(li)
+    end = time.time()
+    print u'多进程执行时间：%s' % (end - start)
+    return hotels
+
+# 测试案例2：pandas
+def test2(hotels):
     # 2015/10/12 : 增加pandas
     # tips : 用二维list数组读取数据，然后一次性放入DataFrame中会快很多
     hotelList = []
     for h in hotels:
-        hotelList.append(h.hotelInfo())
-    df = pd.DataFrame(hotelList, columns=['酒店名称', '评论数', '游记提及条数', '位于区域', '酒店最低价格', '评分'])
-    print df
-    print len(hotels)
-    end2 = time.time()
-    print u'多进程执行时间：%s' % (end2 - start2)
+        hotelList.append(h.getHotelInfo())
+    # df = pd.DataFrame(hotelList, columns=['酒店名称', '评论数', '满意数', '游记提及条数', '位于区域', '酒店最低价格', '评分'])
+    df = pd.DataFrame(hotelList, columns=['hotel_name', 'comments', 'travelNotes', 'area', 'priceInfo'])
 
+# 测试案例3：直接导入mysql数据库
+def test3(hotels):
+    try:
+        conn = MySQLdb.connect(host="localhost", user="root", passwd="544989", db="test_mysql", charset="utf8")
+        cursor = conn.cursor()
+        values = []
+        for hotel in hotels:
+            values.append(hotel.getHotelInfo())
+        cursor.executemany('insert into tmp_testPython values(%s, %s, %s, %s, %s)', values)
+        cursor.close()
+        conn.commit()
+        conn.close()
+    except MySQLdb.Error, e:
+        print "Mysql Error %d: %s" % (e.args[0], e.args[1])
+
+# -------------------------主函数------------------------- #
+if __name__ == '__main__':
+    hotels = test1()
+    test3(hotels)
