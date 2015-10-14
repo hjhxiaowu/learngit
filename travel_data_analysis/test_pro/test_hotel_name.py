@@ -10,7 +10,7 @@ author     : junho
 --------------------------------------------------------
 2015/10/12 : 添加pandas
 2015/10/13 : 添加爬取评分字段
-2015/10/14 : 添加爬取满意条数字段；导入mysql数据库
+2015/10/14 : 添加爬取满意条数字段；导入mysql数据库；增加最低价格提供网站字段
 ########################################################
 """
 
@@ -37,12 +37,13 @@ class Hotel():
         self.priceInfo = priceInfo
         self.score = score
 
-    def __init__(self, name, comments, travelNotes, area, priceInfo):
+    def __init__(self, name, comments, travelNotes, area, priceInfo, priceSite):
         self.name = name
         self.comments = comments
         self.travelNotes = travelNotes
         self.area = area
         self.priceInfo = priceInfo
+        self.priceSite = priceSite
 
     def printHotel(self):
         print u'酒店名称：%s' % self.name
@@ -51,6 +52,7 @@ class Hotel():
         print u'游记提及条数：%s' % self.travelNotes
         print u'位于区域：%s' % self.area
         print u'最低价格：%s元' % self.priceInfo
+        print u'来自：%s元' % self.priceSite
         # print u'评分：%s' % self.score
 
     def getHotelInfo(self):
@@ -61,6 +63,7 @@ class Hotel():
         li.append(self.travelNotes)
         li.append(self.area)
         li.append(self.priceInfo)
+        li.append(self.priceSite)
         # li.append(self.score)
         return li
 
@@ -115,12 +118,20 @@ def getAreas(page):
 def getPriceInfos(page):
     content_field = page.xpath('//*[@id="hotel_list"]/div[@class="hotel-item clearfix h-item"]/div[5]')
     priceInfos = []
+    priceSites = []
     for each in content_field:
         prices = each.xpath('a/em[@class="p"]/span[1]/text()')
-        for index,item in enumerate(prices):
+        sites = each.xpath('a/@data-otaname')
+        i = 0
+        minPrices = int(prices[0])
+        for index, item in enumerate(prices):
             prices[index] = int(item)
-        priceInfos.append(min(prices))
-    return priceInfos
+            if minPrices >= prices[index]:
+                minPrices = prices[index]
+                i = index
+        priceSites.append(sites[i])
+        priceInfos.append(minPrices)
+    return priceInfos, priceSites
 
 # 2015/10/13 : 添加爬取评分、满意条数字段
 def getInsideInfo(page):
@@ -147,12 +158,12 @@ def getHotels(url):
     names = getNames(page)
     comments = getComments(page)
     travelNotes = getTravelNotes(page)
-    priceInfos = getPriceInfos(page)
+    priceInfos, priceSites = getPriceInfos(page)
     areas = getAreas(page)
     # scores, gComments = getInsideInfo(page)
     for i in range(20):
         # hotel = Hotel(names[i], comments[i], gComments[i], travelNotes[i], areas[i], priceInfos[i], scores[i])
-        hotel = Hotel(names[i], comments[i], travelNotes[i], areas[i], priceInfos[i])
+        hotel = Hotel(names[i], comments[i], travelNotes[i], areas[i], priceInfos[i], priceSites[i])
         hotels.append(hotel)
     return hotels
 
@@ -162,9 +173,9 @@ def test1():
     indate = '2015-11-22'
     outdate = '2015-11-23'
     urllist, hotels = [], []
-    for i in range(1, 70):
-        print i
-        url = 'http://www.mafengwo.cn/hotel/11053/?sFrom=mdd#indate=%s&outdate=%s&q=&p=%s&scope=city%%2C0%%2C&sort=comment_desc&sales=0&price=0%%2C' % (indate, outdate, i)
+    for i in range(1, 2):
+        url = 'http://www.mafengwo.cn/hotel/11053/#indate=%s&outdate=%s&q=&p=%s&scope=city%%2C0%%2C&sort=comment_desc&sales=0&price=0%%2C' % (indate, outdate, i)
+        print url
         urllist.append(url)
     pool = Pool(4)
     results = pool.map(getHotels, urllist)
@@ -184,7 +195,8 @@ def test2(hotels):
     for h in hotels:
         hotelList.append(h.getHotelInfo())
     # df = pd.DataFrame(hotelList, columns=['酒店名称', '评论数', '满意数', '游记提及条数', '位于区域', '酒店最低价格', '评分'])
-    df = pd.DataFrame(hotelList, columns=['hotel_name', 'comments', 'travelNotes', 'area', 'priceInfo'])
+    df = pd.DataFrame(hotelList, columns=['hotel_name', 'comments', 'travelNotes', 'area', 'priceInfo', 'priceSite'])
+    print df
 
 # 测试案例3：直接导入mysql数据库
 def test3(hotels):
@@ -194,7 +206,7 @@ def test3(hotels):
         values = []
         for hotel in hotels:
             values.append(hotel.getHotelInfo())
-        cursor.executemany('insert into tmp_testPython values(%s, %s, %s, %s, %s)', values)
+        cursor.executemany('insert into tmp_testPython values(%s, %s, %s, %s, %s, %s)', values)
         cursor.close()
         conn.commit()
         conn.close()
@@ -204,4 +216,4 @@ def test3(hotels):
 # -------------------------主函数------------------------- #
 if __name__ == '__main__':
     hotels = test1()
-    test3(hotels)
+    test2(hotels)
