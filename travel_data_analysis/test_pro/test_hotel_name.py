@@ -55,7 +55,7 @@ class Hotel():
         print u'来自：%s元' % self.priceSite
         # print u'评分：%s' % self.score
 
-    def getHotelInfo(self):
+    def getHotel(self):
         li = []
         li.append(self.name)
         li.append(self.comments)
@@ -67,7 +67,7 @@ class Hotel():
         # li.append(self.score)
         return li
 
-# -------------------------解析方法-------------------------- #
+# -------------------------爬取方法-------------------------- #
 # 获取page
 def getPage(url):
     html = requests.get(url, timeout=30)
@@ -193,7 +193,7 @@ def test2(hotels):
     # tips : 用二维list数组读取数据，然后一次性放入DataFrame中会快很多
     hotelList = []
     for h in hotels:
-        hotelList.append(h.getHotelInfo())
+        hotelList.append(h.getHotel())
     # df = pd.DataFrame(hotelList, columns=['酒店名称', '评论数', '满意数', '游记提及条数', '位于区域', '酒店最低价格', '评分'])
     df = pd.DataFrame(hotelList, columns=['hotel_name', 'comments', 'travelNotes', 'area', 'priceInfo', 'priceSite'])
     print df
@@ -205,7 +205,7 @@ def test3(hotels):
         cursor = conn.cursor()
         values = []
         for hotel in hotels:
-            values.append(hotel.getHotelInfo())
+            values.append(hotel.getHotel())
         cursor.executemany('insert into tmp_testPython values(%s, %s, %s, %s, %s, %s)', values)
         cursor.close()
         conn.commit()
