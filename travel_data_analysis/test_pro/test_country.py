@@ -107,7 +107,6 @@ def getCityInfo(countryid):
             countrys.append(country)
     return countrys
 
-
 # 国外城市爬取信息汇总
 def getCountrys(url):
     page = getPage(url)
