@@ -1,6 +1,6 @@
 # -*-coding:UTF-8 -*-
 
-__author__ = 'HJH'
+__author__ = 'junho'
 
 """
 ########################################################
@@ -22,20 +22,24 @@ import time
 import MySQLdb
 import pandas as pd
 import sys
+from functools import partial
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
 strUrl = 'http://www.mafengwo.cn/mdd/smap.php?mddid='
 
 class Country():
-    def __init__(self, delta, name, city, personNum):
+    def __init__(self, delta=None, name=None, city=None, personNum=None):
         self.delta = delta
         self.name = name
         self.city = city
         self.personNum = personNum
 
     def printCountry(self):
+        print u'所属洲：%s' % self.delta
         print u'国家名称：%s' % self.name
+        print u'城市名称：%s' % self.city
+        print u'去过人数：%s' % self.personNum
 
     def getCountry(self):
         li = []
@@ -67,29 +71,41 @@ def getCountryInfo(page):
     return deltas, names, countryids
 
 # 获取城市信息
-def getCityInfo(countryids):
+"""
+def getCityInfo(countryid):
     citys = []
     personNums = []
-    url = 'http://www.mafengwo.cn/gonglve/sg_ajax.php?sAct=getMapData&iMddid=%s&iType=3&iPage=1' % countryids
+    url = 'http://www.mafengwo.cn/gonglve/sg_ajax.php?sAct=getMapData&iMddid=%s&iType=3&iPage=1' % countryid
     html = requests.get(url, timeout=30)
     page = html.content.encode('utf-8')
     target = json.loads(page)
-    for i in range(len(target['list'])):
-        citys.append(target['list'][i]['name'])
-        personNums.append(target['list'][i]['rank'])
+    print target['mode'], type(target['mode'])
+    if target['mode'] == 1:
+        for i in range(len(target['list'])):
+            citys.append(target['list'][i]['name'])
+            personNums.append(target['list'][i]['rank'])
+    else:
+        for i in range(len(target['list'])):
+            citys.append(target['list'][i]['name'])
+            personNums.append('0')
     return citys, personNums
+"""
 
-def getCityInfo2(countryids):
-    citys = []
-    personNums = []
-    url = 'http://www.mafengwo.cn/gonglve/sg_ajax.php?sAct=getMapData&iMddid=%s&iType=3&iPage=1' % countryids
+def getCityInfo(countryid):
+    countrys = []
+    url = 'http://www.mafengwo.cn/gonglve/sg_ajax.php?sAct=getMapData&iMddid=%s&iType=3&iPage=1' % countryid
     html = requests.get(url, timeout=30)
     page = html.content.encode('utf-8')
     target = json.loads(page)
-    for i in range(len(target['list'])):
-        citys.append(target['list'][i]['name'])
-        personNums.append(target['list'][i]['rank'])
-    return citys, personNums
+    if target['mode'] == 1:
+        for i in range(len(target['list'])):
+            country = Country(city=target['list'][i]['name'], personNum=target['list'][i]['rank'])
+            countrys.append(country)
+    else:
+        for i in range(len(target['list'])):
+            country = Country(target['list'][i]['name'], '0')
+            countrys.append(country)
+    return countrys
 
 # 国外城市爬取信息汇总
 def getCountrys(url):
@@ -100,33 +116,41 @@ def getCountrys(url):
         tmp_citys, tmp_personNums = getCityInfo(tmp_countryids[i])
         for j in range(len(tmp_citys)):
             country = Country(tmp_deltas[i], tmp_names[i], tmp_citys[j], tmp_personNums[j])
+            country.printCountry()
             countrys.append(country)
+    return countrys
+
+# 国外城市爬取信息汇总：多进程
+def getCountrys2(url):
+    start = time.time()
+    page = getPage(url)
+    countrys = []
+    tmp_deltas, tmp_names, tmp_countryids = getCountryInfo(page)
+    pool = Pool(4)
+    results = pool.map(getCityInfo, tmp_countryids)
+    pool.close()
+    pool.join()
+    end = time.time()
+    print u'多进程执行时间：%s' % (end - start)
+    for i in range(len(results)):
+        for j in range(len(results[i])):
+            country = Country(tmp_deltas[i], tmp_names[i], results[i][j].city, results[i][j].personNum)
+            countrys.append(country)
+    print 'len(countrys):%s' % len(countrys)
     return countrys
 
 # 测试案例1:导入pandas
 def test1():
     start = time.time()
     url = 'http://www.mafengwo.cn/mdd/'
-    countrys = getCountrys(url)
+    countrys = getCountrys2(url)
     countrylists = []
     for c in countrys:
         countrylists.append(c.getCountry())
     df = pd.DataFrame(countrylists, columns=['delta', 'name', 'city', 'personNum'])
-    print 'len(df):%s' % len(df)
     end = time.time()
     print u'导入pandas执行时间：%s' % (end - start)
     print df
-
-
-# 测试城市信息爬取
-def test2():
-    countryids = [10184, 10183]
-    tmp_citys, tmp_personNums = getCityInfo2(countryids[0])
-    for i in range(len(tmp_personNums)):
-        print u'韩国', tmp_citys[i], tmp_personNums[i]
-    tmp_citys, tmp_personNums = getCityInfo2(countryids[1])
-    for i in range(len(tmp_personNums)):
-        print u'日本', tmp_citys[i], tmp_personNums[i]
 
 # 测试案例3：导入mysql数据库
 def test3():
@@ -138,7 +162,7 @@ def test3():
         print "Mysql Error %d: %s" % (e.args[0], e.args[1])
     start = time.time()
     url = 'http://www.mafengwo.cn/mdd/'
-    countrys = getCountrys(url)
+    countrys = getCountrys2(url)
     try:
         conn = MySQLdb.connect(host="localhost", user="root", passwd="544989", db="python_pro", charset="utf8")
         cursor = conn.cursor()
@@ -156,4 +180,4 @@ def test3():
 
 # -------------------------主函数------------------------- #
 if __name__ == '__main__':
-    test3()
+    test1()
