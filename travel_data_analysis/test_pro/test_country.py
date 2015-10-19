@@ -152,6 +152,7 @@ def test1():
     print u'导入pandas执行时间：%s' % (end - start)
     print df
 
+
 # 测试案例3：导入mysql数据库
 def test3():
     try:
