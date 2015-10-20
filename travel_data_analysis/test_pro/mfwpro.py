@@ -24,14 +24,30 @@ import sys
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
-# 酒店类
-class Hotel:
-    def __init__(self, delta, country, city, people, hotel, comment_num, travel_note_num, area, min_price,
-                 min_price_site):
+
+# 城市类
+class City:
+    def __init__(self, delta, country, city, city_id, people):
         self.delta = delta
         self.country = country
         self.city = city
+        self.city_id = city_id
         self.people = people
+
+    def get_city(self):
+        li = []
+        li.append(self.delta)
+        li.append(self.country)
+        li.append(self.city)
+        li.append(self.city_id)
+        li.append(self.people)
+        return li
+
+
+# 酒店类
+class Hotel:
+    def __init__(self, city_id, hotel, comment_num, travel_note_num, area, min_price, min_price_site):
+        self.city_id = city_id
         self.hotel = hotel
         self.comment_num = comment_num
         self.travel_note_num = travel_note_num
@@ -41,10 +57,7 @@ class Hotel:
 
     def get_hotel(self):
         li = []
-        li.append(self.delta)
-        li.append(self.country)
-        li.append(self.city)
-        li.append(self.people)
+        li.append(self.city_id)
         li.append(self.hotel)
         li.append(self.comment_num)
         li.append(self.travel_note_num)
@@ -53,9 +66,32 @@ class Hotel:
         li.append(self.min_price_site)
         return li
 
+
+# 爬虫类
+class Crawler:
+    def __init__(self):
+        pass
+
+    def get_page(self, url):
+        html = requests.get(url, timeout=30)
+        return etree.HTML(html.text)
+
+    def get_country_info(self, page):
+        content_field = page.xpath('//div[@class="container"]/div[6]/div/div[1]/div/dl')
+        names = []
+        deltas = []
+        countryids = []
+        for each in content_field:
+            delta = each.xpath('dt/text()')[0]
+            tmp_names = each.xpath('dd/ul/li/a/text()')
+            tmp_countryids = each.xpath('dd/ul/li/a/@href')
+            for i in range(len(tmp_names)):
+                names.append(tmp_names[i].strip())
+                deltas.append(delta)
+                countryids.append(str(tmp_countryids[i])[-10:-5])
+        return deltas, names, countryids
+
 # ----------------------------------爬虫---------------------------------- #
-
-
 def get_page(url):
     html = requests.get(url, timeout=30)
     return etree.HTML(html.text)
