@@ -11,6 +11,8 @@ author     : junho
 ########################################################
 """
 
+from bs4 import BeautifulSoup
+import re
 from multiprocessing import Pool
 from lxml import etree
 import requests
@@ -85,6 +87,7 @@ class Crawler:
         countryids = []
         for each in content_field:
             delta = each.xpath('dt/text()')[0]
+
             tmp_names = each.xpath('dd/ul/li/a/text()')
             tmp_countryids = each.xpath('dd/ul/li/a/@href')
             for i in range(len(tmp_names)):
@@ -96,13 +99,15 @@ class Crawler:
 
 
 # ----------------------------------爬虫---------------------------------- #
+# 获取页面
 def get_page(url):
     html = requests.get(url, timeout=30)
     return etree.HTML(html.text)
 
 
+# 获取国家信息
 def get_country_info(page):
-    content_field = page.xpath('//div[@class="container"]/div[6]/div/div[1]/div/dl')
+    content_field = page.xpath('//div[@class="container"]/div[7]/div/div[1]/div/dl')
     countries = []
     deltas = []
     country_ids = []
@@ -117,33 +122,32 @@ def get_country_info(page):
     return deltas, countries, country_ids
 
 
+# 获取城市信息
 def get_city_info(country_ids):
-    city_names = []
-    peoples = []
-    city_ids = []
+    cities = []
     url = 'http://www.mafengwo.cn/gonglve/sg_ajax.php?sAct=getMapData&iMddid=%s&iType=3&iPage=1' % country_ids
     html = requests.get(url, timeout=30)
     page = html.content.encode('utf-8')
     target = json.loads(page)
-    print target['mode'], type(target['mode'])
     if target['mode'] == 1:
         for i in range(len(target['list'])):
-            city_names.append(target['list'][i]['name'])
-            peoples.append(target['list'][i]['rank'])
-            city_ids.append(target['list'][i]['id'])
+            city = City(city_name=target['list'][i]['name'], city_id=target['list'][i]['id'],
+                        people=target['list'][i]['rank'])
+            cities.append(city)
     else:
         for i in range(len(target['list'])):
-            city_names.append(target['list'][i]['name'])
-            peoples.append('0')
-            city_ids.append(target['list'][i]['id'])
-    return city_names, peoples, city_ids
+            city = City(city_name=target['list'][i]['name'], city_id=target['list'][i]['id'], people=0)
+            cities.append(city)
+    return cities
 
 
+# 获取城市类
 def get_cities(url):
     start_in = time.time()
     page = get_page(url)
     cities = []
     tmp_deltas, tmp_countries, tmp_country_ids = get_country_info(page)
+    print u'len(tmp_countries):%s' % len(tmp_countries)
     pool = Pool(4)
     results = pool.map(get_city_info, tmp_country_ids)
     pool.close()
@@ -159,125 +163,214 @@ def get_cities(url):
     return cities
 
 
-def get_hotel_name(page):
-    hotel_names = page.xpath('//div[@class="hotel-list"]/div[@class="hotel-item clearfix h-item"]/@data-name')
-    return hotel_names
-
-
-def get_comments(page):
+# 获取酒店信息
+def get_hotels(url):
+    # print url
+    tmp_ints = re.findall('\d+', url)
+    city_id = None
+    if tmp_ints:
+        city_id = tmp_ints[1]
+    html = requests.get(url, timeout=30)
+    page = html.content.encode('utf-8')
+    target = json.loads(page)
+    hotels = []
     comments = []
-    content_field = page.xpath('//div[@class="hotel-list"]/div[@class="hotel-item clearfix h-item"]')
+    travel_note_nums = []
+    areas = []
+    min_prices = []
+    min_price_sites = []
+    page_xpath = etree.HTML(target['html'].encode('GBK', 'ignore'))
+    # 酒店名称
+    hotel_names = page_xpath.xpath('//div[@class="hotel-item clearfix h-item"]/@data-name')
+    content_field = page_xpath.xpath('//div[@class="hotel-item clearfix h-item"]')
     for each in content_field:
+        # 酒店评论条数
         comment = each.xpath('div[@class="hotel-info"]/ul/li[1]/a/em/text()')
         if comment:
             comments.append(comment[0])
         else:
             comments.append(u'0条')
-    return comments
-
-
-def get_travel_note_info(page):
-    travel_note_nums = []
-    content_field = page.xpath('//div[@class="hotel-list"]/div[@class="hotel-item clearfix h-item"]')
-    for each in content_field:
+        # 游记提及条数
         travel_note_num = each.xpath('div[@class="hotel-info"]/ul/li[3]/a/em/text()')
         if travel_note_num:
             travel_note_nums.append(travel_note_num[0])
         else:
             travel_note_nums.append(u'0篇')
-    return travel_note_nums
-
-
-def get_areas(page):
-    areas = []
-    content_field = page.xpath('//div[@class="hotel-list"]/div[@class="hotel-item clearfix h-item"]/div[3]/div/span')
-    for each in content_field:
-        area = each.xpath('a/text()')
+        area = each.xpath('div[3]/div/span/a/text()')
         if area:
             areas.append(area[0])
         else:
             areas.append(u'无提供信息')
-    return areas
-
-
-def get_price_info(page):
-    content_field = page.xpath('//*[@id="hotel_list"]/div[@class="hotel-item clearfix h-item"]/div[5]')
-    min_prices = []
-    min_price_sites = []
-    for each in content_field:
-        prices = each.xpath('a/em[@class="p"]/span[1]/text()')
-        sites = each.xpath('a/@data-otaname')
-        i = 0
-        min_price = int(prices[0])
-        for index, item in enumerate(prices):
-            prices[index] = int(item)
-            if min_price >= prices[index]:
-                min_price = prices[index]
-                i = index
-        min_prices.append(min_price)
-        min_price_sites.append(sites[i])
-    return min_prices, min_price_sites
-
-
-def get_hotels(url):
-    hotels = []
-    city_id = url[29:34]
-    print city_id
-    page = get_page(url)
-    hotel_names = get_hotel_name(page)
-    comments = get_comments(page)
-    travel_note_nums = get_travel_note_info(page)
-    min_prices, min_price_sites = get_price_info(page)
-    areas = get_areas(page)
-    for i in range(20):
+        # 价格信息
+        prices = each.xpath('div[5]/a/em[@class="p"]/span[1]/text()')
+        sites = each.xpath('div[5]/a/@data-otaname')
+        if prices:
+            i = 0
+            min_price = int(prices[0])
+            for index, item in enumerate(prices):
+                prices[index] = int(item)
+                if min_price >= prices[index]:
+                    min_price = prices[index]
+                    i = index
+            min_prices.append(min_price)
+            min_price_sites.append(sites[i])
+        else:
+            min_prices.append('0')
+            min_price_sites.append('none')
+    # debug
+    # print 'city_id:%s len(hotel_names);%s len(comments):%s len(travel_note_nums):%s len(min_prices):%s ' \
+    #       'len(min_price_sites):%s len(areas):%s' % (city_id, len(hotel_names), len(comments), len(travel_note_nums),
+    #                                                  len(min_prices), len(min_price_sites), len(areas))
+    for i in range(len(hotel_names)):
         hotel = Hotel(city_id, hotel_names[i], comments[i], travel_note_nums[i], areas[i], min_prices[i],
                       min_price_sites[i])
         hotels.append(hotel)
     return hotels
 
 
-def get_hotels_pool(city_id):
+# 获取酒店url
+def get_hotels_url_list(city_id):
     in_date = '2015-11-22'
     out_date = '2015-11-23'
-    url_tmp = 'http://www.mafengwo.cn/hotel/%s/#indate=%s&outdate=%s&q=&p=1&scope=city%%2C0%%2C&sort=comment_desc&sales=0&price=0%%2C' % (city_id, in_date, out_date)
-    length_hotel = get_page(url_tmp).xpath('//div[@id="list_paginator"]/span/span[1]/text()')[0]
-    url_list, hotels = [], []
-    for i in range(1, length_hotel + 1):
-        url_hotel = 'http://www.mafengwo.cn/hotel/%s/#indate=%s&outdate=%s&q=&p=%s&scope=city%%2C0%%2C&sort=comment_desc&sales=0&price=0%%2C' % (city_id, in_date, out_date, i)
-        print url_hotel
-        url_list.append(url_hotel)
-    pool = Pool(4)
-    results = pool.map(get_hotels, url_list)
-    pool.close()
-    pool.join()
-    if len(results) != 0:
-        for li in results:
-            hotels.extend(li)
-    return hotels
+    url_list = []
+    url_tmp = 'http://www.mafengwo.cn/hotel/ajax.php?sAction=getPoiList4&iMddId=%s&sKeyWord=&sCheckIn=%s&s' \
+          'CheckOut=%s&iPage=1&sTags=&iPriceMin=0&iPriceMax=&only_available=0&only_fav=0&' \
+          'sSortType=comment&sSortFlag=DESC' % (city_id, in_date, out_date)
+    html = requests.get(url_tmp, timeout=30)
+    page = html.content.encode('utf-8')
+    target = json.loads(page)
+    if target:
+        length_page = target['msg']['count']/20 + 1
+        for i in range(1, length_page + 1):
+            url_hotel = 'http://www.mafengwo.cn/hotel/ajax.php?sAction=getPoiList4&iMddId=%s&sKeyWord=&sCheckIn=%s&s' \
+            'CheckOut=%s&iPage=%s&sTags=&iPriceMin=0&iPriceMax=&only_available=0&only_fav=0&' \
+            'sSortType=comment&sSortFlag=DESC' % (city_id, in_date, out_date, i)
+            url_list.append(url_hotel)
+    return url_list
 
 
+# 测试1
 def test1():
     url_mdd = 'http://www.mafengwo.cn/mdd/'
     cities = get_cities(url_mdd)  # 城市模块
     hotels = []
+    url_list = []
     for city in cities:
-        if city.people == '0' or city.people is None or city.people == 'null':
+        if city.people == '0' or city.people is None:
             hotel = Hotel(city_id=city.city_id)
             hotels.append(hotel)
         else:
-            hotel_list = get_hotels_pool(city.city_id)
-            hotels.extend(hotel_list)
-    mfws = []
-    li = []
-    for i in range(len(hotels)):
-        li.append()
+            tmp_list = get_hotels_url_list(city.city_id)
+            url_list.extend(tmp_list)
 
 
+# 临时测试
 def tmp_test():
-    url_tmp = 'http://www.mafengwo.cn/hotel/10855/?sFrom=mdd#indate=2015-11-10&outdate=2015-11-11&q=&p=1&scope=city%2C0%2C&sort=comment_desc&sales=0&price=0%2C&tag=0'
-    page = get_page(url_tmp)
-    length = page.xpath('//div[@id="list_paginator"]/span/span[1]/text()')[0]
-    print length
+    url_mdd = 'http://www.mafengwo.cn/mdd/'
+    cities = get_cities(url_mdd)  # 城市模块
+    hotels, url_list = [], []
+    for city in cities:
+        tmp_list = get_hotels_url_list(city.city_id)
+        url_list.extend(tmp_list)
+    pool = Pool(4)
+    results = pool.map(get_hotels, url_list)
+    pool.close()
+    pool.join()
+    if len(results) >= 1:
+        for r in results:
+            hotels.extend(r)
+    print 'len(hotels):%s' % len(hotels)
+
+
+def test_mysql(hotels):
+    try:
+        conn = MySQLdb.connect(host="localhost", user="root", passwd="544989", db="python_pro", charset="utf8")
+        print u'mysql测试正常'
+        conn.close()
+    except MySQLdb.Error, e:
+        print "Mysql Error %d: %s" % (e.args[0], e.args[1])
+    start = time.time()
+    try:
+        conn = MySQLdb.connect(host="localhost", user="root", passwd="544989", db="python_pro", charset="utf8")
+        cursor = conn.cursor()
+        values = []
+        for hotel in hotels:
+            values.append(country.getCountry())
+        cursor.executemany('insert into tb_mfw values(%s, %s, %s, %s)', values)
+        cursor.close()
+        conn.commit()
+        conn.close()
+    except MySQLdb.Error, e:
+        print "Mysql Error %d: %s" % (e.args[0], e.args[1])
+    end = time.time()
+    print u'导入mysql执行时间：%s' % (end - start)
+
+
+def tmp_test1():
+    url = 'http://www.mafengwo.cn/hotel/ajax.php?sAction=getPoiList4&iMddId=11216&sKeyWord=&sCheckIn=2015-11-22&sCheckOut=2015-11-23&iPage=4&sTags=&iPriceMin=0&iPriceMax=&only_available=0&only_fav=0&sSortType=comment&sSortFlag=DESC'
+    tmp_ints = re.findall('\d+', url)
+    city_id = None
+    if tmp_ints:
+        city_id = tmp_ints[1]
+        page_num = tmp_ints[8]
+    print 'ciyt_id:%s page_num:%s' % (city_id, page_num)
+    html = requests.get(url, timeout=30)
+    page = html.content.encode('utf-8')
+    target = json.loads(page)
+    hotels = []
+    comments = []
+    travel_note_nums = []
+    areas = []
+    min_prices = []
+    min_price_sites = []
+    page_xpath = etree.HTML(target['html'].encode('GBK', 'ignore'))
+    # 酒店名称
+    hotel_names = page_xpath.xpath('//div[@class="hotel-item clearfix h-item"]/@data-name')
+    content_field = page_xpath.xpath('//div[@class="hotel-item clearfix h-item"]')
+    for each in content_field:
+        # 酒店评论条数
+        comment = each.xpath('div[@class="hotel-info"]/ul/li[1]/a/em/text()')
+        if comment:
+            comments.append(comment[0])
+        else:
+            comments.append(u'0条')
+        # 游记提及条数
+        travel_note_num = each.xpath('div[@class="hotel-info"]/ul/li[3]/a/em/text()')
+        if travel_note_num:
+            travel_note_nums.append(travel_note_num[0])
+        else:
+            travel_note_nums.append(u'0篇')
+        area = each.xpath('div[3]/div/span/a/text()')
+        if area:
+            areas.append(area[0])
+        else:
+            areas.append(u'无提供信息')
+        # 价格信息
+        prices = each.xpath('div[5]/a/em[@class="p"]/span[1]/text()')
+        sites = each.xpath('div[5]/a/@data-otaname')
+        if prices:
+            i = 0
+            min_price = int(prices[0])
+            for index, item in enumerate(prices):
+                prices[index] = int(item)
+                if min_price >= prices[index]:
+                    min_price = prices[index]
+                    i = index
+            min_prices.append(min_price)
+            min_price_sites.append(sites[i])
+    if len(min_prices) == 0:
+        tmp_len = len(hotel_names)
+        for i in range(tmp_len):
+            min_prices.append('0')
+            min_price_sites.append('none')
+    # debug
+    print 'city_id:%s len(hotel_names);%s len(comments):%s len(travel_note_nums):%s len(min_prices):%s ' \
+          'len(min_price_sites):%s len(areas):%s' % (city_id, len(hotel_names), len(comments), len(travel_note_nums),
+                                                     len(min_prices), len(min_price_sites), len(areas))
+    for i in range(len(hotel_names)):
+        hotel = Hotel(city_id, hotel_names[i], comments[i], travel_note_nums[i], areas[i], min_prices[i],
+                      min_price_sites[i])
+        hotels.append(hotel)
 
 
 if __name__ == '__main__':
