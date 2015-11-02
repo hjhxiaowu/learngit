@@ -11,14 +11,11 @@ author     : junho
 ########################################################
 """
 
-from bs4 import BeautifulSoup
 import re
 from multiprocessing import Pool
 from lxml import etree
 import requests
 import time
-import random
-import pandas as pd
 import MySQLdb
 import json
 # UnicodeEncodeError: 'ascii' codec can't encode characters in position 0-5: ordinal not in range(128)
@@ -68,34 +65,6 @@ class Hotel:
         li.append(self.min_price)
         li.append(self.min_price_site)
         return li
-
-
-# 爬虫类
-"""
-class Crawler:
-    def __init__(self):
-        pass
-
-    def get_page(self, url):
-        html = requests.get(url, timeout=30)
-        return etree.HTML(html.text)
-
-    def get_country_info(self, page):
-        content_field = page.xpath('//div[@class="container"]/div[6]/div/div[1]/div/dl')
-        names = []
-        deltas = []
-        countryids = []
-        for each in content_field:
-            delta = each.xpath('dt/text()')[0]
-
-            tmp_names = each.xpath('dd/ul/li/a/text()')
-            tmp_countryids = each.xpath('dd/ul/li/a/@href')
-            for i in range(len(tmp_names)):
-                names.append(tmp_names[i].strip())
-                deltas.append(delta)
-                countryids.append(str(tmp_countryids[i])[-10:-5])
-        return deltas, names, countryids
-"""
 
 
 # ----------------------------------爬虫---------------------------------- #
@@ -179,7 +148,7 @@ def get_hotels(url):
     areas = []
     min_prices = []
     min_price_sites = []
-    page_xpath = etree.HTML(target['html'].encode('GBK', 'ignore'))
+    page_xpath = etree.HTML(target['html'])
     # 酒店名称
     hotel_names = page_xpath.xpath('//div[@class="hotel-item clearfix h-item"]/@data-name')
     content_field = page_xpath.xpath('//div[@class="hotel-item clearfix h-item"]')
@@ -253,22 +222,14 @@ def get_hotels_url_list(city_id):
 def test1():
     url_mdd = 'http://www.mafengwo.cn/mdd/'
     cities = get_cities(url_mdd)  # 城市模块
+    values = []
+    for city in cities:
+        values.append(city.get_city())
+    str_sql_city = 'insert into mfw_city values(%s, %s, %s, %s, %s)'
+    test_mysql(values, str_sql_city)
+    cities = cities[:50]
     hotels = []
     url_list = []
-    for city in cities:
-        if city.people == '0' or city.people is None:
-            hotel = Hotel(city_id=city.city_id)
-            hotels.append(hotel)
-        else:
-            tmp_list = get_hotels_url_list(city.city_id)
-            url_list.extend(tmp_list)
-
-
-# 临时测试
-def tmp_test():
-    url_mdd = 'http://www.mafengwo.cn/mdd/'
-    cities = get_cities(url_mdd)  # 城市模块
-    hotels, url_list = [], []
     for city in cities:
         tmp_list = get_hotels_url_list(city.city_id)
         url_list.extend(tmp_list)
@@ -280,103 +241,37 @@ def tmp_test():
         for r in results:
             hotels.extend(r)
     print 'len(hotels):%s' % len(hotels)
+    values = []
+    for hotel in hotels:
+        values.append(hotel.get_hotel())
+    str_sql_city = 'insert into mfw_hotel values(%s, %s, %s, %s, %s, %s, %s)'
+    test_mysql(values, str_sql_city)
 
 
-def test_mysql(hotels):
+def test_mysql(values, str_sql):
     try:
-        conn = MySQLdb.connect(host="localhost", user="root", passwd="544989", db="python_pro", charset="utf8")
+        conn = MySQLdb.connect(host="localhost", user="root", passwd="544989", db="python", charset="utf8")
         print u'mysql测试正常'
         conn.close()
     except MySQLdb.Error, e:
         print "Mysql Error %d: %s" % (e.args[0], e.args[1])
-    start = time.time()
+    start1 = time.time()
     try:
-        conn = MySQLdb.connect(host="localhost", user="root", passwd="544989", db="python_pro", charset="utf8")
+        conn = MySQLdb.connect(host="localhost", user="root", passwd="544989", db="python", charset="utf8")
         cursor = conn.cursor()
-        values = []
-        for hotel in hotels:
-            values.append(country.getCountry())
-        cursor.executemany('insert into tb_mfw values(%s, %s, %s, %s)', values)
+        cursor.executemany(str_sql, values)
         cursor.close()
         conn.commit()
         conn.close()
     except MySQLdb.Error, e:
         print "Mysql Error %d: %s" % (e.args[0], e.args[1])
-    end = time.time()
-    print u'导入mysql执行时间：%s' % (end - start)
-
-
-def tmp_test1():
-    url = 'http://www.mafengwo.cn/hotel/ajax.php?sAction=getPoiList4&iMddId=11216&sKeyWord=&sCheckIn=2015-11-22&sCheckOut=2015-11-23&iPage=4&sTags=&iPriceMin=0&iPriceMax=&only_available=0&only_fav=0&sSortType=comment&sSortFlag=DESC'
-    tmp_ints = re.findall('\d+', url)
-    city_id = None
-    if tmp_ints:
-        city_id = tmp_ints[1]
-        page_num = tmp_ints[8]
-    print 'ciyt_id:%s page_num:%s' % (city_id, page_num)
-    html = requests.get(url, timeout=30)
-    page = html.content.encode('utf-8')
-    target = json.loads(page)
-    hotels = []
-    comments = []
-    travel_note_nums = []
-    areas = []
-    min_prices = []
-    min_price_sites = []
-    page_xpath = etree.HTML(target['html'].encode('GBK', 'ignore'))
-    # 酒店名称
-    hotel_names = page_xpath.xpath('//div[@class="hotel-item clearfix h-item"]/@data-name')
-    content_field = page_xpath.xpath('//div[@class="hotel-item clearfix h-item"]')
-    for each in content_field:
-        # 酒店评论条数
-        comment = each.xpath('div[@class="hotel-info"]/ul/li[1]/a/em/text()')
-        if comment:
-            comments.append(comment[0])
-        else:
-            comments.append(u'0条')
-        # 游记提及条数
-        travel_note_num = each.xpath('div[@class="hotel-info"]/ul/li[3]/a/em/text()')
-        if travel_note_num:
-            travel_note_nums.append(travel_note_num[0])
-        else:
-            travel_note_nums.append(u'0篇')
-        area = each.xpath('div[3]/div/span/a/text()')
-        if area:
-            areas.append(area[0])
-        else:
-            areas.append(u'无提供信息')
-        # 价格信息
-        prices = each.xpath('div[5]/a/em[@class="p"]/span[1]/text()')
-        sites = each.xpath('div[5]/a/@data-otaname')
-        if prices:
-            i = 0
-            min_price = int(prices[0])
-            for index, item in enumerate(prices):
-                prices[index] = int(item)
-                if min_price >= prices[index]:
-                    min_price = prices[index]
-                    i = index
-            min_prices.append(min_price)
-            min_price_sites.append(sites[i])
-    if len(min_prices) == 0:
-        tmp_len = len(hotel_names)
-        for i in range(tmp_len):
-            min_prices.append('0')
-            min_price_sites.append('none')
-    # debug
-    print 'city_id:%s len(hotel_names);%s len(comments):%s len(travel_note_nums):%s len(min_prices):%s ' \
-          'len(min_price_sites):%s len(areas):%s' % (city_id, len(hotel_names), len(comments), len(travel_note_nums),
-                                                     len(min_prices), len(min_price_sites), len(areas))
-    for i in range(len(hotel_names)):
-        hotel = Hotel(city_id, hotel_names[i], comments[i], travel_note_nums[i], areas[i], min_prices[i],
-                      min_price_sites[i])
-        hotels.append(hotel)
+    end1 = time.time()
+    print u'导入mysql执行时间：%s' % (end1 - start1)
 
 
 if __name__ == '__main__':
     start = time.time()
-    # test1()
-    tmp_test()
+    test1()
     end = time.time()
     print u'总执行时间：%s' % (end - start)
 
