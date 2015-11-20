@@ -85,9 +85,10 @@ def get_country_info(page):
         tmp_countries = each.xpath('dd/ul/li/a/text()')
         tmp_country_ids = each.xpath('dd/ul/li/a/@href')
         for i in range(len(tmp_countries)):
-            countries.append(tmp_countries[i].strip())
-            deltas.append(delta)
-            country_ids.append(str(tmp_country_ids[i])[-10:-5])
+            if str(tmp_country_ids[i])[-10:-5] != '21536':  # 剔除中国
+                countries.append(tmp_countries[i].strip())
+                deltas.append(delta)
+                country_ids.append(str(tmp_country_ids[i])[-10:-5])
     return deltas, countries, country_ids
 
 
@@ -227,25 +228,32 @@ def test1():
         values.append(city.get_city())
     str_sql_city = 'insert into mfw_city values(%s, %s, %s, %s, %s)'
     test_mysql(values, str_sql_city)
-    cities = cities[:50]
-    hotels = []
-    url_list = []
-    for city in cities:
-        tmp_list = get_hotels_url_list(city.city_id)
-        url_list.extend(tmp_list)
-    pool = Pool(4)
-    results = pool.map(get_hotels, url_list)
-    pool.close()
-    pool.join()
-    if len(results) >= 1:
-        for r in results:
-            hotels.extend(r)
-    print 'len(hotels):%s' % len(hotels)
-    values = []
-    for hotel in hotels:
-        values.append(hotel.get_hotel())
-    str_sql_city = 'insert into mfw_hotel values(%s, %s, %s, %s, %s, %s, %s)'
-    test_mysql(values, str_sql_city)
+    cities = cities[:502]
+    len_cities = len(cities)/10 + 1
+    for i in range(len_cities):
+        hotels = []
+        url_list = []
+        values = []
+        print i
+        j = i * 10
+        if i == len_cities - 1:
+            tmp_cities = cities[j:]
+        else:
+            tmp_cities = cities[j: j + 10]
+        for city in tmp_cities:
+            tmp_list = get_hotels_url_list(city.city_id)
+            url_list.extend(tmp_list)
+            pool = Pool(6)
+            results = pool.map(get_hotels, url_list)
+            pool.close()
+            pool.join()
+            if len(results) >= 1:
+                for r in results:
+                    hotels.extend(r)
+        for hotel in hotels:
+            values.append(hotel.get_hotel())
+        str_sql_city = 'insert into mfw_hotel values(%s, %s, %s, %s, %s, %s, %s)'
+        test_mysql(values, str_sql_city)
 
 
 def test_mysql(values, str_sql):
